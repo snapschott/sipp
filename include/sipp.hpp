@@ -479,9 +479,16 @@ enum E_Alter_YesNo {
 /********************* Mini-Parser Routines *******************/
 
 int get_method(char *msg);
-char * get_peer_tag(char *msg);
+char * get_peer_tag(const char *msg);
 unsigned long int get_cseq_value(char *msg);
 unsigned long get_reply_code(char *msg);
+
+/* public, so we can unittest it. todo fix this */
+const char *internal_find_param(const char *ptr, const char *name);
+const char *internal_find_header(const char *msg, const char *name, const char *shortname,
+        bool content);
+const char *internal_skip_lws(const char *ptr);
+const char *internal_hdrchr(const char *ptr, const char needle);
 
 /********************* Utilities functions  *******************/
 

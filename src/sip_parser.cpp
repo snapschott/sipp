@@ -32,77 +32,52 @@
  *           Jan Andres from Freenet
  *           Ben Evans from Open Cloud
  *           Marc Van Diest from Belgacom
- *	     Stefan Esser
+ *           Stefan Esser
  *           Andy Aicken
+ *           Walter Doekes
  */
 
 #include <string.h>
 #include <stdlib.h>
+
+#include "sipp.hpp"
+
 #include "screen.hpp"
 #include "strings.hpp"
 #include "sip_parser.hpp"
 
 /*************************** Mini SIP parser ***************************/
 
-char * get_peer_tag(char *msg)
+char * get_peer_tag(const char *msg)
 {
-    char        * to_hdr;
-    char        * ptr;
-    char        * end_ptr;
     static char   tag[MAX_HEADER_LEN];
+    const char  * to_hdr;
+    const char  * ptr;
     int           tag_i = 0;
 
-    to_hdr = strstr(msg, "\r\nTo:");
-    if(!to_hdr) to_hdr = strstr(msg, "\r\nto:");
-    if(!to_hdr) to_hdr = strstr(msg, "\r\nTO:");
-    if(!to_hdr) to_hdr = strstr(msg, "\r\nt:");
-    if(!to_hdr) {
+    /* Find start of header */
+    to_hdr = internal_find_header(msg, "To", "t", true);
+    if (!to_hdr) {
         ERROR("No valid To: header in reply");
     }
 
-    // Remove CRLF
-    to_hdr += 2;
+    /* Skip past display-name */
+    /* FIXME */
 
-    end_ptr = strchr(to_hdr,'\n');
+    /* Skip past LA/RA-quoted addr-spec if any */
+    ptr = internal_hdrchr(to_hdr, '>');
+    if (!ptr) {
+        /* Maybe an addr-spec without quotes */
+        ptr = to_hdr;
+    }
 
-    ptr = strchr(to_hdr, '>');
+    /* Find tag in this header */
+    ptr = internal_find_param(ptr, "tag");
     if (!ptr) {
         return NULL;
     }
 
-    ptr = strchr(to_hdr, ';');
-
-    if(!ptr) {
-        return NULL;
-    }
-
-    to_hdr = ptr;
-
-    ptr = strstr(to_hdr, "tag");
-    if(!ptr) {
-        ptr = strstr(to_hdr, "TAG");
-    }
-    if(!ptr) {
-        ptr = strstr(to_hdr, "Tag");
-    }
-
-    if(!ptr) {
-        return NULL;
-    }
-
-    if (ptr>end_ptr) {
-        return NULL ;
-    }
-
-    ptr = strchr(ptr, '=');
-
-    if(!ptr) {
-        ERROR("Invalid tag param in To: header");
-    }
-
-    ptr ++;
-
-    while((*ptr != ' ')  &&
+    while ((*ptr != ' ')  &&
             (*ptr != ';')  &&
             (*ptr != '\t') &&
             (*ptr != '\r') &&
@@ -110,7 +85,7 @@ char * get_peer_tag(char *msg)
             (*ptr)) {
         tag[tag_i++] = *(ptr++);
     }
-    tag[tag_i] = 0;
+    tag[tag_i] = '\0';
 
     return tag;
 }
@@ -417,3 +392,115 @@ unsigned long get_reply_code(char *msg)
     }
 }
 
+const char *internal_find_header(const char *msg, const char *name, const char *shortname,
+        bool content)
+{
+    /* http://www.in2eps.com/fo-abnf/tk-fo-abnf-sip.html */
+
+    const char *ptr;
+    int namelen = strlen(name);
+    int shortnamelen = shortname ? strlen(shortname) : 0;
+
+    /* Seek past request/response line */
+    ptr = strchr(msg, '\n');
+    if (!ptr || ptr == msg || ptr[-1] != '\r') {
+        return NULL;
+    }
+    ++ptr;
+
+    while (1) {
+        int is_short = 0;
+        /* TODO: should not be "case"-str here.. do we want to be strict? */
+        if (strncasecmp(ptr, name, namelen) == 0 ||
+                (shortname && (is_short = 1) &&
+                    strncasecmp(msg, shortname, shortnamelen) == 0)) {
+            const char *tmp = ptr + (is_short ? strlen(shortname) : strlen(name));
+            while (*tmp == ' ' || *tmp == '\t') {
+                ++tmp;
+            }
+            if (*tmp == ':') {
+                /* Found */
+                if (content) {
+                    /* We just want the content */
+                    ptr = internal_skip_lws(tmp + 1);
+                }
+                break;
+            }
+        }
+
+        /* Seek to next line, but not past EOH */
+        ptr = strchr(ptr, '\n');
+        if (!ptr || ptr[-1] != '\r' || (ptr[1] == '\r' && ptr[2] == '\n')) {
+            return NULL;
+        }
+        ++ptr;
+    }
+
+    return ptr;
+}
+
+const char *internal_hdrchr(const char *ptr, const char needle)
+{
+    if (*ptr == '\n') {
+        return NULL; /* stray LF */
+    }
+
+    while (1) {
+        if (*ptr == '\0') {
+            return NULL;
+        } else if (*ptr == needle) {
+            return ptr;
+        } else if (*ptr == '\n') {
+            if (ptr[-1] == '\r' && ptr[1] != ' ' && ptr[1] != '\t') {
+                return NULL; /* end of header */
+            }
+        }
+        ++ptr;
+    }
+
+    return NULL; /* never gets here */
+}
+
+const char *internal_find_param(const char *ptr, const char *name)
+{
+    int namelen = strlen(name);
+
+    while (1) {
+        ptr = internal_hdrchr(ptr, ';');
+        if (!ptr) {
+            return NULL;
+        }
+        ++ptr;
+
+        ptr = internal_skip_lws(ptr);
+        if (!ptr || !*ptr) {
+            return NULL;
+        }
+
+        /* TODO: should not be "case"-str here.. do we want to be strict? */
+        if (strncasecmp(ptr, name, namelen) == 0 && *(ptr + namelen) == '=') {
+            ptr += namelen + 1;
+            return ptr;
+        }
+    }
+
+    return NULL; /* never gets here */
+}
+
+const char *internal_skip_lws(const char *ptr)
+{
+    while (1) {
+        while (*ptr == ' ' || *ptr == '\t') {
+            ++ptr;
+        }
+        if (ptr[0] == '\r' && ptr[1] == '\n') {
+            if (ptr[2] == ' ' || ptr[2] == '\t') {
+                ptr += 3;
+                continue;
+            }
+            return NULL; /* end of this header */
+        }
+        return ptr;
+    }
+    return NULL; /* never gets here */
+}

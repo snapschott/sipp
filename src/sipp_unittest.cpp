@@ -32,7 +32,7 @@
  *           Charles P Wright from IBM Research
  *           Martin Van Leeuwen
  *           Andy Aicken
- *	     Michael Hirschbichler
+ *           Michael Hirschbichler
  */
 #define GLOBALS_FULL_DEFINITION
 
@@ -238,4 +238,40 @@ TEST(xp_parser, set_xml_buffer_from_string__bad) {
         prop = xp_get_value("name");
         EXPECT_STREQ("Some Scenario", prop);
     }
+}
+
+TEST(Parser, internal_find_header) {
+    char data[] = "OPTIONS sip:server SIP/2.0\r\n"
+"Took: abc1\r\n"
+"To k: abc2\r\n"
+"To\t :\r\n abc3\r\n"
+"From: def\r\n"
+"\r\n";
+    const char *eq = strstr(data, "To\t :");
+    EXPECT_STREQ(eq, internal_find_header(data, "To", "t", false));
+    EXPECT_STREQ(eq + 8, internal_find_header(data, "To", "t", true));
+}
+
+TEST(Parser, get_peer_tag__notag) {
+    EXPECT_STREQ(NULL, get_peer_tag("...\r\nTo: <abc>\r\n;tag=notag\r\n\r\n"));
+}
+
+TEST(Parser, get_peer_tag__normal) {
+    EXPECT_STREQ("normal", get_peer_tag("...\r\nTo: <abc>;t2=x;tag=normal;t3=y\r\n\r\n"));
+}
+
+TEST(Parser, get_peer_tag__normal_2) {
+    EXPECT_STREQ("normal2", get_peer_tag("...\r\nTo: abc;tag=normal2\r\n\r\n"));
+}
+
+TEST(Parser, get_peer_tag__folded) {
+    EXPECT_STREQ("folded", get_peer_tag("...\r\nTo: <abc>\r\n ;tag=folded\r\n\r\n"));
+}
+
+TEST(Parser, get_peer_tag__space) {
+    EXPECT_STREQ("space", get_peer_tag("...\r\nTo: <abc> ;tag=space\r\n\r\n"));
+}
+
+TEST(Parser, get_peer_tag__space_2) {
+    EXPECT_STREQ("space2", get_peer_tag("...\r\nTo \t:\r\n abc\r\n ;tag=space2\r\n\r\n"));
 }
