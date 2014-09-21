@@ -403,7 +403,19 @@ static const char *internal_find_header(const char *msg, const char *name, const
 
     while (1) {
         int is_short = 0;
-        /* TODO: should not be "case"-str here.. do we want to be strict? */
+        /* RFC3261, 7.3.1: When comparing header fields, field names
+         * are always case-insensitive.  Unless otherwise stated in
+         * the definition of a particular header field, field values,
+         * parameter names, and parameter values are case-insensitive.
+         * Tokens are always case-insensitive.  Unless specified
+         * otherwise, values expressed as quoted strings are case-
+         * sensitive.
+         *
+         * Ergo, strcasecmp, because:
+         *   To:...;tag=bla == TO:...;TAG=BLA
+         * But:
+         *   Warning: "something" != Warning: "SoMeThInG"
+         */
         if (strncasecmp(ptr, name, namelen) == 0 ||
                 (shortname && (is_short = 1) &&
                     strncasecmp(msg, shortname, shortnamelen) == 0)) {
@@ -470,7 +482,7 @@ static const char *internal_find_param(const char *ptr, const char *name)
             return NULL;
         }
 
-        /* TODO: should not be "case"-str here.. do we want to be strict? */
+        /* Case insensitive, see RFC 3261 7.3.1 notes above. */
         if (strncasecmp(ptr, name, namelen) == 0 && *(ptr + namelen) == '=') {
             ptr += namelen + 1;
             return ptr;
@@ -520,6 +532,10 @@ TEST(Parser, get_peer_tag__notag) {
 
 TEST(Parser, get_peer_tag__normal) {
     EXPECT_STREQ("normal", get_peer_tag("...\r\nTo: <abc>;t2=x;tag=normal;t3=y\r\n\r\n"));
+}
+
+TEST(Parser, get_peer_tag__upper) {
+    EXPECT_STREQ("upper", get_peer_tag("...\r\nTo: <abc>;t2=x;TAG=upper;t3=y\r\n\r\n"));
 }
 
 TEST(Parser, get_peer_tag__normal_2) {
