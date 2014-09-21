@@ -81,12 +81,8 @@ char * get_peer_tag(const char *msg)
         return NULL;
     }
 
-    while ((*ptr != ' ')  &&
-            (*ptr != ';')  &&
-            (*ptr != '\t') &&
-            (*ptr != '\r') &&
-            (*ptr != '\n') &&
-            (*ptr)) {
+    while (*ptr && *ptr != ' ' && *ptr != ';' && *ptr != '\t' &&
+           *ptr != '\r' && *ptr != '\n') {
         tag[tag_i++] = *(ptr++);
     }
     tag[tag_i] = '\0';
@@ -113,12 +109,12 @@ char * get_header(const char* message, const char * name, bool content)
     /* returns empty string in case of error */
     last_header[0] = '\0';
 
-    if((!message) || (!strlen(message))) {
+    if (!message || !*message) {
         return last_header;
     }
 
     /* for safety's sake */
-    if (NULL == name || NULL == strrchr(name, ':')) {
+    if (!name || !strrchr(name, ':')) {
         WARNING("Can not search for header (no colon): %s", name ? name : "(null)");
         return last_header;
     }
@@ -133,7 +129,7 @@ char * get_header(const char* message, const char * name, bool content)
         snprintf(header_with_newline, MAX_HEADER_LEN, "\n%s", name);
         dest = last_header;
 
-        while((src = strcasestr2(src, header_with_newline))) {
+        while ((src = strcasestr2(src, header_with_newline))) {
             if (content || !first_time) {
                 /* Just want the header's content, so skip over the header
                  * and newline */
@@ -147,37 +143,35 @@ char * get_header(const char* message, const char * name, bool content)
 
             /* Multiline headers always begin with a tab or a space
              * on the subsequent lines. Skip those lines. */
-            while((ptr) &&
-                    ((*(ptr+1) == ' ' ) ||
-                     (*(ptr+1) == '\t')    )) {
+            while (ptr && (*(ptr+1) == ' ' || *(ptr+1) == '\t')) {
                 ptr = strchr(ptr + 1, '\n');
             }
 
-            if(ptr) {
+            if (ptr) {
                 *ptr = 0;
             }
             // Add "," when several headers are present
             if (dest != last_header) {
                 /* Remove trailing whitespaces, tabs, and CRs */
-                while ((dest > last_header) &&
-                        ((*(dest-1) == ' ')  ||
-                         (*(dest-1) == '\r') ||
-                         (*(dest-1) == '\n') ||
-                         (*(dest-1) == '\t'))) {
+                while (dest > last_header &&
+                       (*(dest-1) == ' ' ||
+                        *(dest-1) == '\r' ||
+                        *(dest-1) == '\n' ||
+                        *(dest-1) == '\t')) {
                     *(--dest) = 0;
                 }
 
                 dest += sprintf(dest, ",");
             }
             dest += sprintf(dest, "%s", src);
-            if(ptr) {
+            if (ptr) {
                 *ptr = '\n';
             }
 
             src++;
         }
         /* We found the header. */
-        if(dest != last_header) {
+        if (dest != last_header) {
             break;
         }
         /* We didn't find the header, even in its short form. */
@@ -214,8 +208,8 @@ char * get_header(const char* message, const char * name, bool content)
     *(dest--) = 0;
 
     /* Remove trailing whitespaces, tabs, and CRs */
-    while ((dest > last_header) &&
-            ((*dest == ' ') || (*dest == '\r')|| (*dest == '\t'))) {
+    while (dest > last_header &&
+           (*dest == ' ' || *dest == '\r' || *dest == '\t')) {
         *(dest--) = 0;
     }
 
@@ -224,20 +218,18 @@ char * get_header(const char* message, const char * name, bool content)
 
     /* remove enclosed CRs in multilines */
     /* don't remove enclosed CRs for multiple headers (e.g. Via) (Rhys) */
-    while((ptr = strstr(last_header, "\r\n")) != NULL
-            && (   *(ptr + 2) == ' '
-                   || *(ptr + 2) == '\r'
-                   || *(ptr + 2) == '\t') ) {
+    while ((ptr = strstr(last_header, "\r\n")) != NULL &&
+           (*(ptr + 2) == ' ' || *(ptr + 2) == '\r' || *(ptr + 2) == '\t')) {
         /* Use strlen(ptr) to include trailing zero */
         memmove(ptr, ptr+1, strlen(ptr));
     }
 
     /* Remove illegal double CR characters */
-    while((ptr = strstr(last_header, "\r\r")) != NULL) {
+    while ((ptr = strstr(last_header, "\r\r")) != NULL) {
         memmove(ptr, ptr+1, strlen(ptr));
     }
     /* Remove illegal double Newline characters */
-    while((ptr = strstr(last_header, "\n\n")) != NULL) {
+    while ((ptr = strstr(last_header, "\n\n")) != NULL) {
         memmove(ptr, ptr+1, strlen(ptr));
     }
 
@@ -254,7 +246,7 @@ char * get_first_line(const char * message)
     /* returns empty string in case of error */
     memset(last_header, 0, sizeof(last_header));
 
-    if((!message) || (!strlen(message))) {
+    if (!message || !*message) {
         return last_header;
     }
 
@@ -262,11 +254,10 @@ char * get_first_line(const char * message)
 
     int i=0;
     while (*src) {
-        if((*src=='\n')||(*src=='\r')) {
+        if (*src == '\n' || *src == '\r') {
             break;
-        } else {
-            last_header[i]=*src;
         }
+        last_header[i] = *src;
         i++;
         src++;
     }
@@ -285,28 +276,28 @@ char * get_call_id(char *msg)
     short_form = false;
 
     ptr1 = strstr(msg, "Call-ID:");
-    if(!ptr1) {
+    if (!ptr1) {
         ptr1 = strstr(msg, "Call-Id:");
     }
-    if(!ptr1) {
+    if (!ptr1) {
         ptr1 = strstr(msg, "Call-id:");
     }
-    if(!ptr1) {
+    if (!ptr1) {
         ptr1 = strstr(msg, "call-Id:");
     }
-    if(!ptr1) {
+    if (!ptr1) {
         ptr1 = strstr(msg, "call-id:");
     }
-    if(!ptr1) {
+    if (!ptr1) {
         ptr1 = strstr(msg, "CALL-ID:");
     }
     // For short form, we need to make sure we start from beginning of line
     // For others, no need to
-    if(!ptr1) {
+    if (!ptr1) {
         ptr1 = strstr(msg, "\r\ni:");
         short_form = true;
     }
-    if(!ptr1) {
+    if (!ptr1) {
         WARNING("(1) No valid Call-ID: header in reply '%s'", msg);
         return call_id;
     }
@@ -317,26 +308,23 @@ char * get_call_id(char *msg)
         ptr1 += 8;
     }
 
-    while((*ptr1 == ' ') || (*ptr1 == '\t')) {
+    while (*ptr1 == ' ' || *ptr1 == '\t') {
         ptr1++;
     }
 
-    if(!(*ptr1)) {
+    if (!*ptr1) {
         WARNING("(2) No valid Call-ID: header in reply");
         return call_id;
     }
 
     ptr2 = ptr1;
 
-    while((*ptr2) &&
-            (*ptr2 != ' ') &&
-            (*ptr2 != '\t') &&
-            (*ptr2 != '\r') &&
-            (*ptr2 != '\n')) {
-        ptr2 ++;
+    while (*ptr2 && *ptr2 != ' ' && *ptr2 != '\t' && *ptr2 != '\r' &&
+           *ptr2 != '\n') {
+        ptr2++;
     }
 
-    if(!*ptr2) {
+    if (!*ptr2) {
         WARNING("(3) No valid Call-ID: header in reply");
         return call_id;
     }
@@ -356,27 +344,27 @@ unsigned long int get_cseq_value(char *msg)
 
     // no short form for CSeq:
     ptr1 = strstr(msg, "\r\nCSeq:");
-    if(!ptr1) {
+    if (!ptr1) {
         ptr1 = strstr(msg, "\r\nCSEQ:");
     }
-    if(!ptr1) {
+    if (!ptr1) {
         ptr1 = strstr(msg, "\r\ncseq:");
     }
-    if(!ptr1) {
+    if (!ptr1) {
         ptr1 = strstr(msg, "\r\nCseq:");
     }
-    if(!ptr1) {
+    if (!ptr1) {
         WARNING("No valid Cseq header in request %s", msg);
         return 0;
     }
 
     ptr1 += 7;
 
-    while((*ptr1 == ' ') || (*ptr1 == '\t')) {
+    while (*ptr1 == ' ' || *ptr1 == '\t') {
         ++ptr1;
     }
 
-    if(!(*ptr1)) {
+    if (!*ptr1) {
         WARNING("No valid Cseq data in header");
         return 0;
     }
@@ -386,14 +374,15 @@ unsigned long int get_cseq_value(char *msg)
 
 unsigned long get_reply_code(char *msg)
 {
-    while((msg) && (*msg != ' ') && (*msg != '\t')) msg ++;
-    while((msg) && ((*msg == ' ') || (*msg == '\t'))) msg ++;
+    while (msg && *msg != ' ' && *msg != '\t')
+        ++msg;
+    while (msg && (*msg == ' ' || *msg == '\t'))
+        ++msg;
 
-    if ((msg) && (strlen(msg)>0)) {
+    if (msg && strlen(msg) > 0) {
         return atol(msg);
-    } else {
-        return 0;
     }
+    return 0;
 }
 
 static const char *internal_find_header(const char *msg, const char *name, const char *shortname,
