@@ -554,4 +554,34 @@ TEST(Parser, get_peer_tag__space_2) {
     EXPECT_STREQ("space2", get_peer_tag("...\r\nTo \t:\r\n abc\r\n ;tag=space2\r\n\r\n"));
 }
 
+TEST(Parser, get_call_id_1) {
+    char *msg = strdup("...\r\nCall-Id: test1\r\n\r\n");
+    EXPECT_STREQ("test1", get_call_id(msg));
+    free(msg);
+}
+
+TEST(Parser, get_call_id_2) {
+    char *msg = strdup("...\r\nCALL-ID: test2\r\n\r\n");
+    EXPECT_STREQ("test2", get_call_id(msg));
+    free(msg);
+}
+
+TEST(Parser, get_call_id_3) {
+    char *msg = strdup("...\r\ncall-id: test3\r\n\r\n");
+    EXPECT_STREQ("test3", get_call_id(msg));
+    free(msg);
+}
+
+TEST(Parser, get_call_id_short_1) {
+    char *msg = strdup("...\r\ni: testshort1\r\n\r\n");
+    EXPECT_STREQ("testshort1", get_call_id(msg));
+    free(msg);
+}
+
+TEST(Parser, get_call_id_short_2) {
+    char *msg = strdup("...\r\nI: testshort2\r\n\r\n");
+    EXPECT_STREQ("testshort2", get_call_id(msg));
+    free(msg);
+}
+
 #endif //GTEST
