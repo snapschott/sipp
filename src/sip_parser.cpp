@@ -51,6 +51,7 @@ static const char *internal_find_header(const char *msg, const char *name,
         const char *shortname, bool content);
 static const char *internal_skip_lws(const char *ptr);
 static const char *internal_hdrchr(const char *ptr, const char needle);
+static const char *internal_hdrend(const char *ptr);
 
 char * get_peer_tag(const char *msg)
 {
@@ -265,76 +266,31 @@ char * get_first_line(const char * message)
     return last_header;
 }
 
-char * get_call_id(char *msg)
+char * get_call_id(const char *msg)
 {
     static char call_id[MAX_HEADER_LEN];
-    char * ptr1, * ptr2, * ptr3, backup;
-    bool short_form;
+    const char *content, *eoh;
+    unsigned length;
 
     call_id[0] = '\0';
 
-    short_form = false;
-
-    ptr1 = strstr(msg, "Call-ID:");
-    if (!ptr1) {
-        ptr1 = strstr(msg, "Call-Id:");
-    }
-    if (!ptr1) {
-        ptr1 = strstr(msg, "Call-id:");
-    }
-    if (!ptr1) {
-        ptr1 = strstr(msg, "call-Id:");
-    }
-    if (!ptr1) {
-        ptr1 = strstr(msg, "call-id:");
-    }
-    if (!ptr1) {
-        ptr1 = strstr(msg, "CALL-ID:");
-    }
-    // For short form, we need to make sure we start from beginning of line
-    // For others, no need to
-    if (!ptr1) {
-        ptr1 = strstr(msg, "\r\ni:");
-        short_form = true;
-    }
-    if (!ptr1) {
+    content = internal_find_header(msg, "Call-ID", "i", true);
+    if (!content) {
         WARNING("(1) No valid Call-ID: header in reply '%s'", msg);
         return call_id;
     }
 
-    if (short_form) {
-        ptr1 += 4;
-    } else {
-        ptr1 += 8;
-    }
-
-    while (*ptr1 == ' ' || *ptr1 == '\t') {
-        ptr1++;
-    }
-
-    if (!*ptr1) {
-        WARNING("(2) No valid Call-ID: header in reply");
+    /* Always returns something */
+    eoh = internal_hdrend(content);
+    length = eoh - content;
+    if (length + 1 > MAX_HEADER_LEN) {
+        WARNING("(1) Call-ID: header too long in reply '%s'", msg);
         return call_id;
     }
 
-    ptr2 = ptr1;
-
-    while (*ptr2 && *ptr2 != ' ' && *ptr2 != '\t' && *ptr2 != '\r' &&
-           *ptr2 != '\n') {
-        ptr2++;
-    }
-
-    if (!*ptr2) {
-        WARNING("(3) No valid Call-ID: header in reply");
-        return call_id;
-    }
-
-    backup = *ptr2;
-    *ptr2 = 0;
-    if ((ptr3 = strstr(ptr1, "///")) != 0) ptr1 = ptr3+3;
-    strcpy(call_id, ptr1);
-    *ptr2 = backup;
-    return (char *) call_id;
+    memcpy(call_id, content, length);
+    call_id[length] = '\0';
+    return call_id;
 }
 
 unsigned long int get_cseq_value(char *msg)
@@ -466,6 +422,25 @@ static const char *internal_hdrchr(const char *ptr, const char needle)
     return NULL; /* never gets here */
 }
 
+/* Seek to end of this header. */
+static const char *internal_hdrend(const char *ptr)
+{
+    const char *p = ptr;
+    while (*p) {
+        if (p[0] == '\r' && p[1] == '\n' && (p[2] != ' ' && p[2] != '\t')) {
+            /* Seek backwards, skipping whitespace. */
+            --p;
+            while (p >= ptr &&
+                   (*p == '\r' || *p == '\n' || *p == ' ' || *p == '\t')) {
+                --p;
+            }
+            return p + 1;
+        }
+        ++p;
+    }
+    return p;
+}
+
 static const char *internal_find_param(const char *ptr, const char *name)
 {
     int namelen = strlen(name);
@@ -555,33 +530,23 @@ TEST(Parser, get_peer_tag__space_2) {
 }
 
 TEST(Parser, get_call_id_1) {
-    char *msg = strdup("...\r\nCall-Id: test1\r\n\r\n");
-    EXPECT_STREQ("test1", get_call_id(msg));
-    free(msg);
+    EXPECT_STREQ("test1", get_call_id("...\r\nCall-ID: test1\r\n\r\n"));
 }
 
 TEST(Parser, get_call_id_2) {
-    char *msg = strdup("...\r\nCALL-ID: test2\r\n\r\n");
-    EXPECT_STREQ("test2", get_call_id(msg));
-    free(msg);
+    EXPECT_STREQ("test2", get_call_id("...\r\nCALL-ID:\r\n test2\r\n\r\n"));
 }
 
 TEST(Parser, get_call_id_3) {
-    char *msg = strdup("...\r\ncall-id: test3\r\n\r\n");
-    EXPECT_STREQ("test3", get_call_id(msg));
-    free(msg);
+    EXPECT_STREQ("test3", get_call_id("...\r\ncall-id:\r\n\ttest3   \r\n\r\n"));
 }
 
 TEST(Parser, get_call_id_short_1) {
-    char *msg = strdup("...\r\ni: testshort1\r\n\r\n");
-    EXPECT_STREQ("testshort1", get_call_id(msg));
-    free(msg);
+    EXPECT_STREQ("testshort1", get_call_id("...\r\ni: testshort1\r\n\r\n"));
 }
 
 TEST(Parser, get_call_id_short_2) {
-    char *msg = strdup("...\r\nI: testshort2\r\n\r\n");
-    EXPECT_STREQ("testshort2", get_call_id(msg));
-    free(msg);
+    EXPECT_STREQ("testshort2", get_call_id("...\r\nI:\r\n \r\n testshort2  \t \r\n\r\n"));
 }
 
 #endif //GTEST

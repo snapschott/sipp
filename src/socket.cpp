@@ -270,7 +270,7 @@ bool process_command(char *command)
 int command_mode = 0;
 char *command_buffer = NULL;
 
-extern char * get_call_id(char *msg);
+extern char * get_call_id(const char *msg);
 extern bool sipMsgCheck (const char *P_msg, struct sipp_socket *socket);
 
 #ifdef _USE_OPENSSL
