@@ -114,6 +114,6 @@ sipp_unittest_SOURCES = $(common_SOURCES) \
 	./gtest/src/gtest-all.cc \
 	./gtest/src/gtest_main.cc
 
-sipp_unittest_CFLAGS = $(AM_CFLAGS) -I./gtest/include -I./gtest @GSL_CFLAGS@
-sipp_unittest_CXXFLAGS = $(AM_CXXFLAGS) -I./gtest/include -I./gtest @GSL_CXXFLAGS@
+sipp_unittest_CFLAGS = $(AM_CFLAGS) -DGTEST=1 -I./gtest/include -I./gtest @GSL_CFLAGS@
+sipp_unittest_CXXFLAGS = $(AM_CXXFLAGS) DGTEST=1 -I./gtest/include -I./gtest @GSL_CXXFLAGS@
 sipp_unittest_LDADD = @LIBOBJS@ @GSL_LIBS@

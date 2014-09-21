@@ -40,13 +40,17 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "sipp.hpp"
-
 #include "screen.hpp"
 #include "strings.hpp"
 #include "sip_parser.hpp"
 
 /*************************** Mini SIP parser ***************************/
+
+static const char *internal_find_param(const char *ptr, const char *name);
+static const char *internal_find_header(const char *msg, const char *name,
+        const char *shortname, bool content);
+static const char *internal_skip_lws(const char *ptr);
+static const char *internal_hdrchr(const char *ptr, const char needle);
 
 char * get_peer_tag(const char *msg)
 {
@@ -392,7 +396,7 @@ unsigned long get_reply_code(char *msg)
     }
 }
 
-const char *internal_find_header(const char *msg, const char *name, const char *shortname,
+static const char *internal_find_header(const char *msg, const char *name, const char *shortname,
         bool content)
 {
     /* http://www.in2eps.com/fo-abnf/tk-fo-abnf-sip.html */
@@ -439,7 +443,7 @@ const char *internal_find_header(const char *msg, const char *name, const char *
     return ptr;
 }
 
-const char *internal_hdrchr(const char *ptr, const char needle)
+static const char *internal_hdrchr(const char *ptr, const char needle)
 {
     if (*ptr == '\n') {
         return NULL; /* stray LF */
@@ -461,7 +465,7 @@ const char *internal_hdrchr(const char *ptr, const char needle)
     return NULL; /* never gets here */
 }
 
-const char *internal_find_param(const char *ptr, const char *name)
+static const char *internal_find_param(const char *ptr, const char *name)
 {
     int namelen = strlen(name);
 
@@ -487,7 +491,7 @@ const char *internal_find_param(const char *ptr, const char *name)
     return NULL; /* never gets here */
 }
 
-const char *internal_skip_lws(const char *ptr)
+static const char *internal_skip_lws(const char *ptr)
 {
     while (1) {
         while (*ptr == ' ' || *ptr == '\t') {
@@ -504,3 +508,45 @@ const char *internal_skip_lws(const char *ptr)
     }
     return NULL; /* never gets here */
 }
+
+
+#ifdef GTEST
+#include "gtest/gtest.h"
+
+TEST(Parser, internal_find_header) {
+    char data[] = "OPTIONS sip:server SIP/2.0\r\n"
+"Took: abc1\r\n"
+"To k: abc2\r\n"
+"To\t :\r\n abc3\r\n"
+"From: def\r\n"
+"\r\n";
+    const char *eq = strstr(data, "To\t :");
+    EXPECT_STREQ(eq, internal_find_header(data, "To", "t", false));
+    EXPECT_STREQ(eq + 8, internal_find_header(data, "To", "t", true));
+}
+
+TEST(Parser, get_peer_tag__notag) {
+    EXPECT_STREQ(NULL, get_peer_tag("...\r\nTo: <abc>\r\n;tag=notag\r\n\r\n"));
+}
+
+TEST(Parser, get_peer_tag__normal) {
+    EXPECT_STREQ("normal", get_peer_tag("...\r\nTo: <abc>;t2=x;tag=normal;t3=y\r\n\r\n"));
+}
+
+TEST(Parser, get_peer_tag__normal_2) {
+    EXPECT_STREQ("normal2", get_peer_tag("...\r\nTo: abc;tag=normal2\r\n\r\n"));
+}
+
+TEST(Parser, get_peer_tag__folded) {
+    EXPECT_STREQ("folded", get_peer_tag("...\r\nTo: <abc>\r\n ;tag=folded\r\n\r\n"));
+}
+
+TEST(Parser, get_peer_tag__space) {
+    EXPECT_STREQ("space", get_peer_tag("...\r\nTo: <abc> ;tag=space\r\n\r\n"));
+}
+
+TEST(Parser, get_peer_tag__space_2) {
+    EXPECT_STREQ("space2", get_peer_tag("...\r\nTo \t:\r\n abc\r\n ;tag=space2\r\n\r\n"));
+}
+
+#endif //GTEST
