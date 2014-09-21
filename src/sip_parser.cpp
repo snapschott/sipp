@@ -418,7 +418,7 @@ static const char *internal_find_header(const char *msg, const char *name, const
          */
         if (strncasecmp(ptr, name, namelen) == 0 ||
                 (shortname && (is_short = 1) &&
-                    strncasecmp(msg, shortname, shortnamelen) == 0)) {
+                    strncasecmp(ptr, shortname, shortnamelen) == 0)) {
             const char *tmp = ptr + (is_short ? strlen(shortname) : strlen(name));
             while (*tmp == ' ' || *tmp == '\t') {
                 ++tmp;
